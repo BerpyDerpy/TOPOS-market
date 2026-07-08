@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "topos-market"
+version = "0.1.0"
+description = "TOPOS-Market: curiosity-driven LOB trading agent (GWT architecture). Contracts, registry, and tripwire scaffold."
+requires-python = ">=3.12"
+dependencies = [
+    "numpy==2.5.1",
+    "scipy==1.18.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "hypothesis==6.156.3",
+    "mypy==2.2.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["topos*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["topos"]
