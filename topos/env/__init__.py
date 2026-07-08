@@ -8,6 +8,22 @@ randomness flows through named counter-based RNG streams (INV-9); see
 `topos.contracts.rng`.
 """
 
+from topos.env.background import (
+    DEFAULT_REGIMES,
+    REGIME_ACTOR_ID,
+    ZI_ACTOR_ID,
+    BackgroundConfig,
+    BackgroundMarket,
+    DrawRecord,
+    MMConfig,
+    RegimeController,
+    RegimeParams,
+    RegimeRecord,
+    StabilizingMM,
+    ZIConfig,
+    ZIFlow,
+    mm_actor_id,
+)
 from topos.env.engine import (
     ActorAccount,
     EngineAck,
@@ -29,4 +45,18 @@ __all__ = [
     "EngineFill",
     "EngineTrade",
     "EngineEvent",
+    "BackgroundMarket",
+    "BackgroundConfig",
+    "ZIConfig",
+    "MMConfig",
+    "ZIFlow",
+    "StabilizingMM",
+    "RegimeController",
+    "RegimeParams",
+    "RegimeRecord",
+    "DrawRecord",
+    "DEFAULT_REGIMES",
+    "ZI_ACTOR_ID",
+    "REGIME_ACTOR_ID",
+    "mm_actor_id",
 ]
