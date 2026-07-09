@@ -26,6 +26,7 @@ from topos.beliefs.core import (
 from topos.beliefs.fair_value import FairValueKF, microprice_from_observation
 from topos.beliefs.flow_intensity import BANDS, KINDS, FlowIntensity, band_of
 from topos.beliefs.queue_filter import QueuePositionFilter
+from topos.beliefs.regime import R_RECENT, RHO_MIN, RegimeConfig, RegimeTracker
 
 __all__ = [
     "BANDS",
@@ -37,6 +38,10 @@ __all__ = [
     "InverseGammaPosterior",
     "KINDS",
     "QueuePositionFilter",
+    "RHO_MIN",
+    "RegimeConfig",
+    "RegimeTracker",
+    "R_RECENT",
     "SurpriseTracker",
     "band_of",
     "bernoulli_entropy_nats",

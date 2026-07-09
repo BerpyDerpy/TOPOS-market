@@ -305,6 +305,60 @@ Recorded during P6 (self-model, 2026-07-09):
     posterior. Ordering total entropies across posteriors with different fill
     means is not a valid test and was deliberately not asserted.
 
+Recorded during P8 (proposer, 2026-07-09):
+
+22. **Coarse-menu encodings and the proposer's world input.** Offsets are measured
+    from the mid per the Intent contract: touch = half-spread, deep = half-spread + 4
+    (the shallowest price of the "deep" band the flow and fill models share), small
+    marketable = -half-spread at ONE lot (the size quantum — the smallest intervention
+    that still exercises the aggression channel). Quote shapes carry patience 1.0 so
+    scoring never bundles staleness cancels of unrelated orders into a probe;
+    cancel-refresh re-quotes the working order's remaining size at the touch with
+    patience 0. Message cost and motor legality come from the motor's pure `compile`
+    (INV-8 makes calling it during proposal exact forecasting, not action) against a
+    book reconstructed from the broadcast `WorldSummary` (one live level per side at
+    the implied touch): the proposer's world input is the broadcast, and only touch
+    prices matter to compilation. All ProbeSpecs carry one horizon — the fill model's,
+    wired at construction — and marginals compare candidate vs null through the same
+    module at the same horizon, so the choice cancels out of every comparison.
+
+23. **Gates and the INV-5 boundary.** The proposer defines a `DistanceProjector`
+    protocol and receives an implementation injected per cycle; it imports nothing
+    from drives/ (pinned by a package-local source scan that also bans account-state
+    vocabulary). Gate (a3): the one-step self-forecast's inventory pmf must keep every
+    projected distance inside the soft bands with confidence 1 - delta, delta = 0.05 —
+    the per-tail mass of the `interval(0.9)` convention already fixed in the conjugate
+    cells. Variables not predictable from the cognitive view are carried forward at
+    their current distances by the projector (the no-information forecast), so a
+    breach of an account-side band gates every candidate out and rule (d) hands the
+    cycle to the corrective fallback without the proposer ever seeing account state.
+
+24. **Churn extinction lives in rule (c), not in a threshold on EIG.** Conjugate EIGs
+    approach 0 asymptotically without reaching it, so "strictly positive marginal"
+    alone would let a saturated bucket be probed forever. EPSILON_EIG = 0.02 nats —
+    the convergence level the P4/P6 saturation tripwires already pin — defines the
+    boredom band: once the top marginal falls inside it, the null (marginal exactly 0,
+    gates permitting) joins the tie-break pool and wins on minimum self-entropy,
+    watching being the most self-predictable action on any menu. The strict-positive
+    eligibility test in rule (b) handles world hypotheses, whose probes' marginals are
+    exactly 0 (item 13).
+
+25. **Flatten never competes on EIG.** It targets SELF_TRAJECTORY (A2), which carries
+    no experiment bookkeeping; if a flatten-shaped action is genuinely the best
+    experiment for the focus, the refined grid contains the equivalent probe with
+    `target_id` = focus. Flatten enters selection only as the rule-(d) fallback, at
+    the constructor's full default size — partial-correction sizing remains the
+    homeostat's business (A1). The refined stage runs whenever the coarse winner's
+    marginal is strictly positive, however small, so the epsilon logic of item 24 is
+    exercised rather than short-circuited.
+
+26. **Null-intent bookkeeping target.** The emitted null carries the focus id when
+    the focus is a probeable module; otherwise (no focus yet, or the passive-only
+    REGIME, which per A3 never appears on an Intent) it carries FAIR_VALUE, the
+    archetypal hypothesis whose information rides the null. The target id on a null is
+    bookkeeping only — no module's scoring reads it — and per the standing ruling the
+    null's commitment is 0.0 exactly.
+
 ### Adjudication (design review, 2026-07-08)
 
 All ten resolutions reviewed against the running code and **accepted**, with items 1, 6,
