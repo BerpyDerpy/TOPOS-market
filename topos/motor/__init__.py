@@ -2,5 +2,13 @@
 
 A pure function of its declared inputs: no randomness, no hidden state
 (INV-8). Intent and compiled messages are logged side by side in the
-`WorkspaceRecord`.
+``WorkspaceRecord``.
 """
+
+from topos.motor.compiler import compile
+from topos.motor.config import MotorConfig
+
+__all__ = [
+    "MotorConfig",
+    "compile",
+]

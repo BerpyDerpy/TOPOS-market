@@ -148,6 +148,13 @@ tripwires as their modules are implemented (P4+); their structural halves are al
 pinned by the contracts (`BeliefModule.eig_nats` signature and docstring, `Headline.
 best_marginal_eig_nats`, `ModuleRegistry` freezing, `EntropySnapshot`).
 
+As of P4, INV-3's behavioral tripwire is `tests/beliefs/test_eig_matches_monte_carlo.py`
+(eig_nats must equal a brute-force Monte Carlo estimate of parameter–observation mutual
+information; predictive entropy alone fails it by the aleatoric term), backed by
+`test_eig_saturation.py` and `test_noisy_tv.py` (curiosity saturates; surprise does not
+leak into EIG). INV-10's mechanics are pinned by the snapshot tests in
+`tests/beliefs/test_fair_value.py` / `test_flow_intensity.py`.
+
 ## 7. Open questions
 
 Concerns noted during scaffolding, implemented as specified — recorded here rather than
@@ -197,6 +204,51 @@ deviated on:
     (`side`, `size_frac`, `patience`, `commitment`, empty `target_id`). The spec gives
     the ranges but does not say whether construction should enforce them; enforcing at
     the contract boundary was judged the conservative reading.
+
+Recorded during P4 (world beliefs, 2026-07-09):
+
+11. **FairValueKF noise uncertainty is a single common scale.** The spec's "uncertain
+    observation/state noise scales tracked via conjugate inverse-gamma posteriors" is
+    implemented as R = c·r0, Q = c·Q0 with known shapes (r0, Q0) and ONE uncertain scale
+    c ~ InverseGamma — the West & Harrison unknown-variance DLM. Both noise scales are
+    genuinely uncertain (perfectly correlated a priori); this is the only form with an
+    EXACT conjugate inverse-gamma update (standardized squared innovations), exact
+    Student-t predictives, and exactly calibrated credible intervals. Independent scales
+    for R and Q admit no exact conjugate update — only iterative variational
+    approximations, against the spirit of INV-2's "conjugate updates only".
+12. **FairValueKF `eig_nats` is PARAMETER EIG only; state EIG is exposed separately.**
+    "Parameter uncertainty is the epistemic part; the Kalman state covariance alone is
+    not sufficient" (INV-3) is read as: curiosity = I(c; Y). The closed form
+    0.5·ln(det Σ_prior/det Σ_post) about the latent state is implemented as
+    `state_eig_nats` (MC-verified) but excluded from `eig_nats`: a steady-state filter
+    earns constant state information every step forever, so including it would make
+    curiosity unsaturatable — the churn the saturation/noisy-TV tests forbid.
+13. **World-model EIG is intent-independent (and, for fair value, horizon-independent).**
+    Microprice and public flow are observed passively, so an order-placing probe earns
+    exactly the EIG of the null at the same horizon: marginal EIG over null is 0 for
+    world predictors, and the null action carries their EIG (INV-4). Probes that CAN buy
+    information belong to the self-model hypotheses (P5/P6). The probed observable is the
+    microprice at horizon end (fair value) / counts aggregated over the horizon (flow);
+    for the fair-value scale family, I(c; y_h) is invariant to the h-dependent variance
+    multiplier, hence horizon-independent — a property, not a bug (pinned by the MC test
+    at h ∈ {1, 5}).
+14. **FlowIntensity extraction conventions and the P1 trade-print gap.** Counts are in
+    lots; 18 cells = {arrival, cancel, market} × side × {touch ≤0, near 1–3, deep ≥4
+    ticks from the pre-step best}. Own footprint is subtracted so cells model BACKGROUND
+    flow: own resting placements leave arrivals, own cancellations leave cancels, and own
+    TAKER fills net the passive side's decrease — necessary because agent-caused prints
+    never appear in `Observation.trades` (committed P1 behavior, now an explicit P4
+    decision: the flow model sees background-caused prints only; P13 must score it
+    accordingly). Message→ack pairing is positional (k-th placement ack ↔ k-th
+    PlaceLimit); level departures/arrivals caused by the 10-level visibility window are
+    accepted as extraction noise.
+15. **Forgetting monotonicity is a converged-regime property.** With S ← ρS + (1−ρ)S0 as
+    specified, a single extreme outlier can leave posterior entropy momentarily ABOVE the
+    prior direction of travel (a shocking observation widens an inverse-gamma posterior),
+    in which case an immediate forget could reduce entropy. The formula is implemented
+    exactly as specified; the non-decreasing property is asserted where it is a theorem —
+    after convergence and at the prior — matching the intent (reinflation after regime
+    shifts, P11).
 
 ### Adjudication (design review, 2026-07-08)
 

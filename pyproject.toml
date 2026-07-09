@@ -30,3 +30,7 @@ pythonpath = ["."]
 python_version = "3.12"
 strict = true
 files = ["topos"]
+
+[[tool.mypy.overrides]]
+module = ["scipy", "scipy.*"]
+ignore_missing_imports = true
