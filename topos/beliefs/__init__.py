@@ -10,10 +10,12 @@ never predictive variance or predictive entropy alone (INV-3).
 """
 
 from topos.beliefs.core import (
+    BetaPosterior,
     EIGTerms,
     GammaPosterior,
     InverseGammaPosterior,
     SurpriseTracker,
+    bernoulli_entropy_nats,
     forget_stats,
     gaussian_entropy_nats,
     information_gain_terms,
@@ -23,17 +25,21 @@ from topos.beliefs.core import (
 )
 from topos.beliefs.fair_value import FairValueKF, microprice_from_observation
 from topos.beliefs.flow_intensity import BANDS, KINDS, FlowIntensity, band_of
+from topos.beliefs.queue_filter import QueuePositionFilter
 
 __all__ = [
     "BANDS",
+    "BetaPosterior",
     "EIGTerms",
     "FairValueKF",
     "FlowIntensity",
     "GammaPosterior",
     "InverseGammaPosterior",
     "KINDS",
+    "QueuePositionFilter",
     "SurpriseTracker",
     "band_of",
+    "bernoulli_entropy_nats",
     "forget_stats",
     "gaussian_entropy_nats",
     "information_gain_terms",

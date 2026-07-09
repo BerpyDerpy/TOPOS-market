@@ -250,6 +250,61 @@ Recorded during P4 (world beliefs, 2026-07-09):
     after convergence and at the prior — matching the intent (reinflation after regime
     shifts, P11).
 
+Recorded during P6 (self-model, 2026-07-09):
+
+16. **SelfEvents timing convention.** The action submitted alongside the
+    observation stamped s executes in engine step s; its acks/fills (stamped s)
+    arrive in the observation stamped s+1. `SelfEvents` therefore groups an
+    observation with the messages sent ONE observation earlier — the messages
+    whose acks it carries — and item 14's positional pairing applies within that
+    grouping. P12 must build `SelfEvents` this way (pinned by the P6 harness
+    test, which fails under same-observation pairing).
+17. **Bookkeeping: live views fold immediately; ground-truth claims replay in
+    stamp order.** One observation can deliver fills stamped both s-1 (own
+    action at s-1) and s (background maker fills of step s), and "account at end
+    of engine step k" means exactly "fills stamped <= k" (the P3 hook's
+    contract). `Books.claims()` therefore replays observed fills by stamp while
+    the live views stay maximally fresh. Realized PnL is average-cost; the
+    method-independent identity realized + unrealized = cash + inventory * mark
+    is pinned by tests.
+18. **Fill-model trial protocol.** Buckets are (side, cross/touch/near/deep,
+    imbalance tripartition at ±1/3), with depth edges inherited verbatim from
+    the flow model's BANDS; bucketing uses the DECISION-time context (the
+    observation before the ack). Partial-by-horizon updates the Beta cell with
+    the filled fraction (one fractional pseudo-trial); own cancel strictly
+    before the horizon CENSORS the trial (discarded — counting it as no-fill
+    would bias every bucket downward in proportion to motor impatience);
+    cancel/expiry at-or-after the horizon resolves at the observed fraction.
+    The null action's EIG through fill_rate is exactly 0: self-model
+    information must be BOUGHT by acting — the complement of item 13.
+19. **ImpactModel is the unknown-variance form again.** The NIG regression
+    reuses `InverseGammaPosterior` via standardized squared residuals
+    (y - m·x)² / (1 + xᵀVx), so P4's conjugate cell is the single noise-scale
+    mechanism in the codebase; EIG is Student-t predictive entropy minus
+    ½(ln 2πe + ln b - ψ(a)), closed form, MC-verified. The own-effect variance
+    handed to the trajectory compiler is coefficient uncertainty only
+    (ΔxᵀVΔx · E[σ²]): the residual mid noise is the fair-value model's account
+    and would otherwise be double-booked. Context regressors are a
+    fixed-dimension slot (default 1: the flow headline mean) set per cycle.
+20. **SelfTrajectory compiles by moment matching over an exact fill-outcome
+    enumeration** — not Monte Carlo, so the compiler is deterministic (in the
+    spirit of INV-8). Documented approximations: fills at horizon start
+    (exposure upper bound), impact permanent over H, per-order independence
+    given the bucket means, value-change-given-inventory moment-matched to a
+    Gaussian discretized on the tick-lot grid (+1/12 unit-cell variance — a
+    property of the integer grid, giving a deterministic forecast ~0 nats
+    instead of a divergent differential entropy). Joint entropy is exact by the
+    chain rule. Default horizon = the fill model's horizon, the only horizon
+    the fill posteriors answer without extrapolation.
+21. **Learning does not uniformly lower self-entropy — and should not.** A
+    settled fill posterior (p→1) commits forecast weight to the EXPOSED branch,
+    which can raise the total self-entropy of an aggressive intent from flat
+    relative to an ignorant posterior (p≈0.5) that hedges across branches. The
+    ordinal tests therefore isolate the channels: fill ignorance maximizes
+    INVENTORY entropy; impact ignorance raises VALUE entropy at a fixed fill
+    posterior. Ordering total entropies across posteriors with different fill
+    means is not a valid test and was deliberately not asserted.
+
 ### Adjudication (design review, 2026-07-08)
 
 All ten resolutions reviewed against the running code and **accepted**, with items 1, 6,

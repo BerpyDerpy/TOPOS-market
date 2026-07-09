@@ -221,6 +221,18 @@ def gaussian_entropy_nats(variance: float | FloatArray) -> float | FloatArray:
     return 0.5 * (LOG_2PIE + np.log(variance))
 
 
+def bernoulli_entropy_nats(p: float) -> float:
+    """H[Bernoulli(p)] = -p ln p - (1-p) ln(1-p), with 0 ln 0 = 0."""
+    if not 0.0 <= p <= 1.0:
+        raise ValueError(f"p must be in [0, 1], got {p}")
+    h = 0.0
+    if p > 0.0:
+        h -= p * math.log(p)
+    if p < 1.0:
+        h -= (1.0 - p) * math.log(1.0 - p)
+    return h
+
+
 def poisson_entropy_nats(mus: FloatArray) -> FloatArray:
     """Entropy of Poisson(mu) for an array of means, by truncated summation.
 
@@ -456,3 +468,95 @@ class InverseGammaPosterior:
             gaussian_entropy_nats(nodes * scale_free_var), dtype=np.float64
         )
         return information_gain_terms(predictive_entropy, conditional, weights)
+
+
+class BetaPosterior:
+    """Beta(a, b) posterior over a Bernoulli success probability p.
+
+    Outcomes may be FRACTIONAL (e.g. an order partially filled by its
+    horizon): observing fraction f in [0, 1] updates
+    (a, b) -> (a + f, b + (1 - f)) — one pseudo-trial per outcome, split
+    between the success and failure counts. (a, b) are the accumulated
+    sufficient statistics (prior pseudo-counts included), so `forget`
+    discounts them straight toward (a0, b0).
+
+    The Bernoulli parameter EIG I(p; Y) has a fully closed form via
+    digamma (see ``eig_terms_bernoulli``); no quadrature is needed.
+    """
+
+    def __init__(self, prior_a: float, prior_b: float) -> None:
+        if prior_a <= 0.0 or prior_b <= 0.0:
+            raise ValueError(f"prior must be positive, got a={prior_a}, b={prior_b}")
+        self._a0 = float(prior_a)
+        self._b0 = float(prior_b)
+        self.a = float(prior_a)
+        self.b = float(prior_b)
+
+    @property
+    def prior_a(self) -> float:
+        return self._a0
+
+    @property
+    def prior_b(self) -> float:
+        return self._b0
+
+    def observe(self, success_fraction: float) -> None:
+        """Conjugate update from one (possibly fractional) trial outcome."""
+        if not 0.0 <= success_fraction <= 1.0:
+            raise ValueError(
+                f"success_fraction must be in [0, 1], got {success_fraction}"
+            )
+        self.a += success_fraction
+        self.b += 1.0 - success_fraction
+
+    def forget(self, rho: float) -> None:
+        forgotten = forget_stats(
+            np.array([self.a, self.b]), np.array([self._a0, self._b0]), rho
+        )
+        self.a, self.b = float(forgotten[0]), float(forgotten[1])
+
+    def mean(self) -> float:
+        return self.a / (self.a + self.b)
+
+    def variance(self) -> float:
+        n = self.a + self.b
+        return self.a * self.b / (n * n * (n + 1.0))
+
+    def entropy_nats(self) -> float:
+        return float(stats.beta.entropy(self.a, self.b))
+
+    def interval(self, level: float) -> tuple[float, float]:
+        """Central credible interval at the given level (e.g. 0.9)."""
+        tail = 0.5 * (1.0 - level)
+        lo = float(stats.beta.ppf(tail, self.a, self.b))
+        hi = float(stats.beta.ppf(1.0 - tail, self.a, self.b))
+        return lo, hi
+
+    def quadrature(self) -> tuple[FloatArray, FloatArray]:
+        """Fixed quadrature nodes/weights over the probability posterior."""
+
+        def ppf(u: FloatArray) -> FloatArray:
+            values: FloatArray = stats.beta.ppf(u, self.a, self.b)
+            return values
+
+        return quantile_quadrature(ppf)
+
+    def eig_terms_bernoulli(self) -> EIGTerms:
+        """I(p; Y) for a single Bernoulli trial Y | p, fully closed form.
+
+        H[Y] is the binary entropy of the predictive mean a/(a+b);
+        E_p H[Y | p] uses E[p ln p] = E[p] (psi(a+1) - psi(a+b+1)) and
+        E[(1-p) ln(1-p)] = E[1-p] (psi(b+1) - psi(a+b+1)) — the standard
+        Beta log-moment identities via digamma.
+        """
+        p_bar = self.mean()
+        predictive_entropy = bernoulli_entropy_nats(p_bar)
+        psi_total = float(special.digamma(self.a + self.b + 1.0))
+        e_p_ln_p = p_bar * (float(special.digamma(self.a + 1.0)) - psi_total)
+        e_q_ln_q = (1.0 - p_bar) * (float(special.digamma(self.b + 1.0)) - psi_total)
+        conditional = -(e_p_ln_p + e_q_ln_q)
+        return EIGTerms(
+            eig_nats=predictive_entropy - conditional,
+            predictive_entropy_nats=predictive_entropy,
+            expected_conditional_entropy_nats=conditional,
+        )
