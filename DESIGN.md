@@ -359,6 +359,61 @@ Recorded during P8 (proposer, 2026-07-09):
     bookkeeping only — no module's scoring reads it — and per the standing ruling the
     null's commitment is 0.0 exactly.
 
+Recorded during P9 (workspace and arbiter, 2026-07-10):
+
+27. **S_MIN is derived, not invented.** The ignition threshold is
+    `EPSILON_EIG_NATS / len(KNOWN_HYPOTHESIS_IDS)` (= 0.02/7): the salience of a
+    boredom-band question carried at uniform structural centrality — both factors are
+    scales the architecture already owns (the saturation tripwires' convergence level
+    and the registry's no-edges fallback weight). A homeostat drive crosses it at
+    u ≈ 0.05, so a hair past the soft band does not seize the workspace. The threshold
+    is strict (salience must exceed it); ties in the competition break homeostatic
+    first, then lexicographic id.
+
+28. **World hypotheses never win focus — by arithmetic, not by rule.** Salience uses
+    the proposer's MARGINAL EIG (the coarse-menu output the spec names), which is
+    exactly 0 for fair value, flow, and regime (items 13/22): the workspace attends
+    only where information is for sale (self-model hypotheses and drives), and world
+    information rides the null. Consequence: in the integrated loop the two
+    focus-conditioned world modules run in their coarse/quoted regimes essentially
+    always. This is the attention economy working as designed, not a starvation bug —
+    their posteriors stay exact (item 31) and their EIG never feeds their own
+    marginals.
+
+29. **Two proposer calls per cycle resolve the focus/menu chicken-and-egg.** Stage 1
+    must run before the competition (headlines need the coarse marginals) but the
+    refined menu needs the winner, so the workspace calls `propose(focus=None)` for
+    the headline input and, when a hypothesis wins, `propose(focus=winner)` for the
+    refined menu — stage 1 is recomputed inside the second call (cheap, closed-form).
+    The arbiter takes `proposal.selected` verbatim; it re-verifies the coalition
+    (positive marginal AND gates passed for any committed non-flatten intent) and
+    raises `CoalitionError` on violation rather than re-implementing or patching over
+    the selection rule.
+
+30. **Record conventions.** `WorkspaceRecord.intent` is never None: a quiet cycle logs
+    an explicit null intent (commitment 0.0 exactly, FAIR_VALUE bookkeeping target per
+    item 26). `eig_promised_nats` is None for any null intent (spec), the selected
+    candidate's TOTAL `eig_nats` for a committed probe (the number INV-10's realized
+    IG on the target module is compared against — not the marginal), and 0.0 for
+    flatten/corrective intents, which promise action, not information. A homeostatic
+    focus whose corrective intent is None (e.g. message budget — its correction is to
+    stop sending) resolves to the null. Record messages are compiled against
+    `book_from_summary` (the gates' documented approximation): the broadcast is the
+    workspace's world input, and the record is emitted before anything is submitted.
+
+31. **Broadcast conditioning changes granularity and timing, never posterior limits.**
+    The hook contract (`condition_on_focus(focus)`, explicit registration, validated
+    at construction): focus is permission to spend, and must never change what a
+    posterior would eventually converge to. FlowIntensity buffers unfocused evidence
+    per cell and flushes on refocus — EXACT by Gamma-Poisson batchability (sum counts,
+    sum exposure), pinned by a twin test; its coarse aggregate cell (prior = sum of
+    cell priors) is exactly the posterior the fine cells induce on the total rate,
+    because every cell shares one exposure path; fine and coarse surprise live on
+    separate z-trackers; `forget()` flushes first (evidence precedes the discount).
+    FairValueKF gates its parameter-EIG quadrature: unfocused curiosity is quoted from
+    the last focused refresh. Both modules default to focused, so standalone use (and
+    every pre-P9 test) is the full-fidelity path.
+
 ### Adjudication (design review, 2026-07-08)
 
 All ten resolutions reviewed against the running code and **accepted**, with items 1, 6,

@@ -51,6 +51,7 @@ from topos.contracts.beliefs import (
     SelfEvents,
 )
 from topos.contracts.intent import FLOW_INTENSITY, HypothesisId
+from topos.contracts.workspace import Focus
 from topos.contracts.market import (
     AckStatus,
     BookLevel,
@@ -127,6 +128,21 @@ class FlowIntensity:
         self._surprise = SurpriseTracker(ewma_decay=surprise_ewma_decay)
         self._last_counts: dict[CellKey, int] = {}
         self._step = 0
+        # Broadcast conditioning (P9). Standalone modules run at full
+        # per-band fidelity; a workspace sets the flag each cycle via the
+        # hook. Unfocused evidence is buffered per cell and folded in
+        # exactly on the next focused refresh (Gamma-Poisson batches
+        # exactly: sum the counts, sum the exposure), while the coarse
+        # aggregate posterior over the TOTAL rate stays current every
+        # step. Because every cell shares one exposure path, the coarse
+        # cell (prior = sum of the cell priors) is not an approximation:
+        # it is exactly the posterior the fine cells induce on their sum.
+        self._focused = True
+        self._pending: dict[CellKey, int] = {}
+        self._pending_exposure = 0.0
+        self._coarse = GammaPosterior(prior_a * len(self._cells), prior_b)
+        self._surprise_coarse = SurpriseTracker(ewma_decay=surprise_ewma_decay)
+        self._last_z = 0.0
 
     # -- posterior access (public: tests, proposer, metrics read these) ----
 
@@ -159,26 +175,70 @@ class FlowIntensity:
             return
         counts = self._extract_counts(prev, obs, own_resting, own_cancels, own_taker)
         self._last_counts = counts
-        nll = 0.0
-        for key, cell in self._cells.items():
-            count = counts.get(key, 0)
-            y = np.array([float(count)])
-            nll -= float(cell.predictive_log_pmf(y, _STEP_DT)[0])
-            cell.observe(count, _STEP_DT)
-        self._surprise.score(nll)
+        total = sum(counts.get(key, 0) for key in self._cells)
+        if self._focused:
+            # Fine path: refresh every per-band posterior, score the
+            # step's surprise on the full 18-cell joint predictive.
+            self._flush_pending()
+            nll = 0.0
+            for key, cell in self._cells.items():
+                count = counts.get(key, 0)
+                y = np.array([float(count)])
+                nll -= float(cell.predictive_log_pmf(y, _STEP_DT)[0])
+                cell.observe(count, _STEP_DT)
+            self._last_z = self._surprise.score(nll)
+        else:
+            # Coarse path (unfocused): buffer the per-cell evidence for
+            # the next focused refresh; surprise is scored against the
+            # aggregate predictive of the total count, on its own tracker
+            # (fine and coarse NLLs live on different scales, and each
+            # tracker z-scores against its own history).
+            coarse_nll = -float(
+                self._coarse.predictive_log_pmf(np.array([float(total)]), _STEP_DT)[0]
+            )
+            self._last_z = self._surprise_coarse.score(coarse_nll)
+            for key in self._cells:
+                count = counts.get(key, 0)
+                if count:
+                    self._pending[key] = self._pending.get(key, 0) + count
+            self._pending_exposure += _STEP_DT
+        # The aggregate view is maintained every step regardless of focus.
+        self._coarse.observe(total, _STEP_DT)
 
     def forget(self, rho: float) -> None:
-        """Discount every cell's sufficient statistics toward its prior."""
+        """Discount every cell's sufficient statistics toward its prior.
+
+        Buffered unfocused evidence is folded in first: evidence precedes
+        the discount, otherwise a later flush would resurrect statistics
+        the regime shift asked to be forgotten.
+        """
+        self._flush_pending()
         for cell in self._cells.values():
             cell.forget(rho)
+        self._coarse.forget(rho)
 
     def posterior_entropy_nats(self) -> float:
-        """Joint PARAMETER-posterior entropy: sum over independent cells."""
+        """Joint PARAMETER-posterior entropy: sum over independent cells.
+
+        While unfocused this is quoted from the last per-band refresh
+        (buffered evidence not yet folded in) — the coarse aggregate does
+        not decompose into the 18 questions the fine posterior answers.
+        """
         return sum(cell.entropy_nats() for cell in self._cells.values())
 
     def predict(self) -> ForecastStats:
-        """Total background events (lots) expected next step, with the
-        negative-binomial predictive variance summed over cells."""
+        """Total background events (lots) expected next step.
+
+        Fine path (no buffered evidence): negative-binomial predictive
+        mean/variance summed over the per-band cells. Coarse path
+        (unfocused, evidence buffered): the same two moments from the
+        aggregate posterior over the total rate — current where the fine
+        cells are stale, coarse where they are fine.
+        """
+        if self._pending_exposure > 0.0:
+            mean = self._coarse.mean() * _STEP_DT
+            variance = mean * (1.0 + _STEP_DT / self._coarse.b)
+            return ForecastStats(mean=mean, variance=variance)
         mean = 0.0
         variance = 0.0
         for cell in self._cells.values():
@@ -188,15 +248,50 @@ class FlowIntensity:
         return ForecastStats(mean=mean, variance=variance)
 
     def surprise_z(self) -> float:
-        """Salience-only surprise; never feeds EIG or action scoring."""
-        return self._surprise.last_z
+        """Salience-only surprise; never feeds EIG or action scoring.
+
+        The z of whichever channel scored last: the fine 18-cell joint
+        while focused, the coarse aggregate otherwise.
+        """
+        return self._last_z
+
+    def condition_on_focus(self, focus: Focus | None) -> None:
+        """Broadcast conditioning hook (P9): finer work when focused.
+
+        Winning focus triggers the per-band refresh immediately, so the
+        proposer's refined menu (which runs right after the broadcast)
+        interrogates caught-up posteriors. See ``topos.workspace.
+        broadcast`` for the pattern.
+        """
+        self._focused = focus is not None and focus.hypothesis_id == self.hypothesis_id
+        if self._focused:
+            self._flush_pending()
+
+    def _flush_pending(self) -> None:
+        """Fold buffered unfocused evidence into the per-band cells.
+
+        Exact, not approximate: Gamma-Poisson conjugacy makes one batched
+        ``observe(sum of counts, sum of exposure)`` identical to the
+        per-step updates it stands in for.
+        """
+        if self._pending_exposure <= 0.0:
+            return
+        for key, cell in self._cells.items():
+            cell.observe(self._pending.get(key, 0), self._pending_exposure)
+        self._pending.clear()
+        self._pending_exposure = 0.0
 
     def eig_nats(self, probe: ProbeSpec) -> float:
         """I(lambdas; counts over the probe horizon), summed over cells."""
         return self.eig_breakdown(probe).eig_nats
 
     def eig_breakdown(self, probe: ProbeSpec) -> EIGTerms:
-        """The epistemic/aleatoric decomposition behind ``eig_nats``."""
+        """The epistemic/aleatoric decomposition behind ``eig_nats``.
+
+        Computed on the per-band cells; while unfocused (P9 broadcast
+        conditioning) those are quoted from the last per-band refresh —
+        attention is what buys the fine-grained update.
+        """
         if probe.horizon_steps < 1:
             raise ValueError(
                 f"probe horizon_steps must be >= 1, got {probe.horizon_steps}"

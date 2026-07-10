@@ -45,6 +45,7 @@ from topos.contracts.beliefs import (
 )
 from topos.contracts.intent import FAIR_VALUE, HypothesisId
 from topos.contracts.market import BookLevel, Observation
+from topos.contracts.workspace import Focus
 
 from topos.beliefs.core import (
     EIGTerms,
@@ -114,6 +115,10 @@ class FairValueKF:
         self._initialized = False
         self._surprise = SurpriseTracker(ewma_decay=surprise_ewma_decay)
         self._step = 0
+        # Broadcast conditioning (P9). Standalone modules run at full
+        # fidelity; a workspace sets the flag each cycle via the hook.
+        self._focused = True
+        self._eig_cache: dict[int, EIGTerms] = {}
 
     # -- posterior access (public: tests, proposer, metrics read these) ----
 
@@ -211,9 +216,31 @@ class FairValueKF:
         return self.eig_breakdown(probe).eig_nats
 
     def eig_breakdown(self, probe: ProbeSpec) -> EIGTerms:
-        """The epistemic/aleatoric decomposition behind ``eig_nats``."""
-        _, s_star = self.horizon_prediction(self._validated_horizon(probe))
-        return self._scale.eig_terms_for_gaussian(s_star)
+        """The epistemic/aleatoric decomposition behind ``eig_nats``.
+
+        Broadcast conditioning (P9): the quadrature over the
+        inverse-gamma posterior runs only while focused (or on the very
+        first call at a given horizon); unfocused, the last focused
+        refresh is quoted. Attention buys the fresh quadrature — the
+        posterior itself updates identically either way, so focus only
+        chooses when the fine-grained curiosity figure is materialized.
+        """
+        horizon = self._validated_horizon(probe)
+        cached = self._eig_cache.get(horizon)
+        if self._focused or cached is None:
+            _, s_star = self.horizon_prediction(horizon)
+            cached = self._scale.eig_terms_for_gaussian(s_star)
+            self._eig_cache[horizon] = cached
+        return cached
+
+    def condition_on_focus(self, focus: Focus | None) -> None:
+        """Broadcast conditioning hook (P9): finer work when focused.
+
+        See ``topos.workspace.broadcast`` for the pattern. This module's
+        conditioned work is the parameter-EIG quadrature gated in
+        ``eig_breakdown``.
+        """
+        self._focused = focus is not None and focus.hypothesis_id == self.hypothesis_id
 
     def snapshot_entropy(self) -> EntropySnapshot:
         """Parameter-posterior entropy at this instant (INV-10)."""

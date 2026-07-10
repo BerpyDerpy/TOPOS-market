@@ -176,7 +176,7 @@ class Proposer:
                     projector=projector,
                 )
             )
-        if focus_module is not None and focus != REGIME:
+        if focus is not None and focus != REGIME and focus_module is not None:
             coarse_winner = best_shape[focus]
             if coarse_winner is not None:
                 for shape in refined_shapes(
