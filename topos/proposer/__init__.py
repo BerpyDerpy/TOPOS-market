@@ -31,7 +31,7 @@ from topos.proposer.config import (
     REFINED_PATIENCE_GRID,
     REFINED_SIZE_FACTORS,
 )
-from topos.proposer.core import Proposer
+from topos.proposer.core import Proposer, SelectionRule
 from topos.proposer.gates import (
     DistanceProjector,
     GateReport,
@@ -55,6 +55,7 @@ __all__ = [
     "REFINED_OFFSET_STEPS",
     "REFINED_PATIENCE_GRID",
     "REFINED_SIZE_FACTORS",
+    "SelectionRule",
     "book_from_summary",
     "coarse_shapes",
     "compiled_messages",

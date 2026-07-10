@@ -143,6 +143,16 @@ class FlowIntensity:
         self._coarse = GammaPosterior(prior_a * len(self._cells), prior_b)
         self._surprise_coarse = SurpriseTracker(ewma_decay=surprise_ewma_decay)
         self._last_z = 0.0
+        # EIG memo (pure caching, no behavior change): this module's EIG
+        # is intent-independent — a function of the per-band posteriors
+        # and the horizon alone — and the proposer's standing menu asks
+        # for it once per shape per cycle. Entries are keyed by exposure
+        # and validated against a fingerprint of the cells' sufficient
+        # statistics, so ANY change to any cell (update, flush, forget,
+        # or a test poking a cell directly) forces a recomputation.
+        self._eig_cache_by_exposure: dict[
+            float, tuple[tuple[tuple[float, float], ...], EIGTerms]
+        ] = {}
 
     # -- posterior access (public: tests, proposer, metrics read these) ----
 
@@ -297,6 +307,12 @@ class FlowIntensity:
                 f"probe horizon_steps must be >= 1, got {probe.horizon_steps}"
             )
         exposure = float(probe.horizon_steps) * _STEP_DT
+        fingerprint = tuple(
+            (cell.a, cell.b) for cell in self._cells.values()
+        )
+        cached = self._eig_cache_by_exposure.get(exposure)
+        if cached is not None and cached[0] == fingerprint:
+            return cached[1]
         eig = 0.0
         predictive = 0.0
         aleatoric = 0.0
@@ -305,7 +321,9 @@ class FlowIntensity:
             eig += terms.eig_nats
             predictive += terms.predictive_entropy_nats
             aleatoric += terms.expected_conditional_entropy_nats
-        return EIGTerms(eig, predictive, aleatoric)
+        result = EIGTerms(eig, predictive, aleatoric)
+        self._eig_cache_by_exposure[exposure] = (fingerprint, result)
+        return result
 
     def snapshot_entropy(self) -> EntropySnapshot:
         """Parameter-posterior entropy at this instant (INV-10)."""

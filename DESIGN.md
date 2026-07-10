@@ -414,6 +414,88 @@ Recorded during P9 (workspace and arbiter, 2026-07-10):
     the last focused refresh. Both modules default to focused, so standalone use (and
     every pre-P9 test) is the full-fidelity path.
 
+Recorded during P12 (integrated agent, 2026-07-10):
+
+32. **One message per engine step; the compilation's head is submitted.**
+    The P3 harness accepts at most one `ExchangeMessage` per `step()` call
+    (committed P1-P3 behavior). The agent submits the FIRST message of the
+    cycle's compiled tuple and deliberately queues nothing: the arbiter
+    re-evaluates every cycle from fresh state, so a cancel-then-replace
+    compilation completes across consecutive steps as the working-order
+    view updates, whereas queued leftovers would execute against a book
+    they were not compiled for. INV-8's record stays lossless — the intent
+    and the FULL compilation are logged side by side; the message log holds
+    what was actually sent.
+
+33. **SelfEvents pairing is a two-slot shift in the integrated loop.** The
+    harness builds each step's observation BEFORE applying that step's
+    agent action, so the observation returned by `step(a)` never answers
+    `a`: acks for the action decided in cycle k arrive in cycle k+2's
+    observation (one ENGINE step later — the reset observation and the
+    first step observation share stamp 0). Item 16's convention is
+    implemented exactly as the P6 harness test's sent/pending shuffle;
+    pairing one observation too early silently loses every fill from
+    bookkeeping (caught by the P3 hook during P12 bring-up).
+
+34. **The proposer's scoring map is {fair_value, flow_intensity, fill_rate,
+    impact} — queue_position and regime are appraised but not scored.**
+    REGIME is passive-only (A3). QUEUE_POSITION's watch-EIG is
+    intent-independent (the P5 observation model: the rank question is
+    answered by watching the level; a fresh placement's point-mass prior
+    carries ~0 first-step EIG), so its marginal over null is 0 by the same
+    arithmetic that keeps world hypotheses out of focus (item 28). Both
+    still update, headline, and forget normally; the workspace reads their
+    headline marginals as the 0 they would compute, without paying the
+    queue filter's Monte-Carlo EIG once per menu shape per cycle. This is
+    also the module-map shape the P8/P9 suites pinned.
+
+35. **Homeostat evaluation is hoisted immediately before the workspace
+    call.** The spec's numbered order interleaves appraisal (5) before the
+    homeostat (6), but P9's committed `Workspace.cycle()` runs
+    appraise->compete->broadcast->propose->ignite atomically and CONSUMES
+    the homeostat exports. Appraisal reads nothing the homeostat writes,
+    so evaluating between the WorldSummary build (5a) and the workspace
+    call preserves every data dependency of the numbered order.
+
+36. **FlowIntensity memoizes its EIG on a sufficient-statistic
+    fingerprint.** The module's EIG is intent-independent — a pure function
+    of (per-band posteriors, horizon) — and the standing coarse menu asks
+    for it once per shape per cycle (~20x per cycle, ~95% of loop runtime
+    before the memo). Entries are validated against the tuple of every
+    cell's (a, b), so any mutation — update, flush, forget, or a test
+    poking a cell directly — forces recomputation. Pure caching; no
+    behavioral change (and while unfocused the cells buffer, so the cache
+    also implements item 31's "quoted from the last refresh" literally).
+
+37. **Pre-market cycles are explicit null records.** Until a two-sided
+    book has ever been seen there is no mid to anchor a WorldSummary, a
+    probe price, or a mark; fabricating mid 0 would compile orders at
+    price ~0. Such cycles still ingest, update every module, and emit a
+    COMPLETE WorkspaceRecord (headlines appraised honestly, marginals 0,
+    explicit null intent, no messages). Once a mid exists it is carried
+    forward through momentarily one-sided books, mirroring `Books.mark`.
+
+38. **Regime-gated forgetting arms after R_RECENT slow ticks.** BOCPD's
+    run-length support is bounded by the number of ticks observed, so for
+    the first R_RECENT ticks P(run < R_RECENT) = 1 vacuously and
+    `current_rho()` would command near-maximal forgetting every tick,
+    erasing all warmup learning. The agent applies `forget(current_rho())`
+    only once `n_ticks > R_RECENT` — the earliest tick at which "a recent
+    changepoint" is distinguishable from "the market just opened". A
+    structural warmup, not a calibration.
+
+39. **Ablation flags substitute strategy objects at construction.** Each
+    flag replaces exactly one object at exactly one injection point
+    (scoring-map wrappers; frozen self-model subclasses; an alternative
+    selection rule — `Proposer` gained a default-preserving `selection`
+    constructor parameter as the seam; a homeostat export filter plus null
+    projector). With all flags off none of the strategy classes is even
+    instantiated. The experiment ledger holds one probe in flight
+    (structural: at most one intent per cycle, resolved at the start of
+    the next), and its resolution routine is the single place INV-10's
+    snapshot order is implemented; the broken orderings live only in the
+    P12 test suite as mutants.
+
 ### Adjudication (design review, 2026-07-08)
 
 All ten resolutions reviewed against the running code and **accepted**, with items 1, 6,

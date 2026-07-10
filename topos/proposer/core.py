@@ -25,7 +25,8 @@ byproducts arrive as exported values (veto flags, distance projector).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from typing import Callable, TypeAlias
 
 from topos.contracts.beliefs import BeliefModule, ProbeSpec
 from topos.contracts.intent import (
@@ -52,6 +53,17 @@ from topos.proposer.candidates import (
 from topos.proposer.gates import DistanceProjector, evaluate_gates
 from topos.proposer.selection import select_candidate
 
+SelectionRule: TypeAlias = Callable[
+    [Sequence[Candidate], Mapping[str, float]], Candidate
+]
+"""Signature of the selection rule applied to one cycle's candidate set.
+
+The default is (and remains) the exported lexicographic rule
+``topos.proposer.selection.select_candidate``; the parameter exists so the
+agent loop (P12) can inject an ablation strategy (e.g. NO_REFLEXIVE) at
+construction without any conditional in this package.
+"""
+
 
 class Proposer:
     """Two-stage experiment proposer (P8).
@@ -70,6 +82,7 @@ class Proposer:
         trajectory: SelfTrajectory,
         motor_cfg: MotorConfig,
         probe_horizon_steps: int,
+        selection: SelectionRule = select_candidate,
     ) -> None:
         """``probe_horizon_steps`` is the single horizon every ProbeSpec
         carries — P12 wires the fill model's horizon, the only horizon the
@@ -77,7 +90,8 @@ class Proposer:
         as the trajectory compiler's default). Marginal scores compare a
         candidate and the null through the same module at the same
         horizon, so the choice cancels out of every comparison that
-        matters."""
+        matters. ``selection`` defaults to the exported lexicographic rule
+        and exists only as the P12 injection seam (see ``SelectionRule``)."""
         if probe_horizon_steps < 1:
             raise ValueError(
                 f"probe_horizon_steps must be >= 1, got {probe_horizon_steps}"
@@ -92,6 +106,7 @@ class Proposer:
         self._trajectory = trajectory
         self._motor_cfg = motor_cfg
         self._horizon = probe_horizon_steps
+        self._selection = selection
 
     def propose(
         self,
@@ -202,7 +217,7 @@ class Proposer:
                         )
                     )
 
-        selected = select_candidate(candidates, cognitive.drive_distances)
+        selected = self._selection(candidates, cognitive.drive_distances)
         return Proposal(
             focus=focus,
             null_eig_nats=null_eig,
