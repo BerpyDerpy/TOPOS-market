@@ -496,6 +496,82 @@ Recorded during P12 (integrated agent, 2026-07-10):
     snapshot order is implemented; the broken orderings live only in the
     P12 test suite as mutants.
 
+Recorded during P13 (metrics, ablation, falsification, 2026-07-11):
+
+40. **Measurement stack and boundary.** Each metric is a pure function
+    `RunData(s) -> tidy table + serializable summary`; `RunData` bundles the
+    harness RunLog with the agent-side channels P12 committed for P13
+    (records, message log, experiment ledger) plus an end-of-run impact-
+    posterior snapshot and the null-agent twin replay. A repo-wide tripwire
+    (`test_metrics_importers`) allowlists tests/ and experiments/ as the only
+    importers of `topos.metrics`. The experiment configs' environment knobs
+    (regime hazard lowered to 0.002, scheduled switches at thirds, fixed
+    literal seed lists) are measurement design — no agent constant is set
+    anywhere in metrics/ or experiments/.
+
+41. **F5 scope: world hypotheses cannot be ledgered under FULL.** Their probe
+    marginals are exactly 0 (items 13/28), so the arbiter never opens a
+    fair_value/flow_intensity experiment and their information rides the
+    untracked null. The falsification spec names those two hypotheses; the
+    executable F5 binds where entries exist. SURPRISE_CURIOSITY does ledger
+    world hypotheses (surprise-driven commits) and those slopes are reported.
+
+42. **Ledger resolution predates the probe's own evidence for fill_rate.**
+    The ledger resolves on the NEXT cycle's observation, but acks arrive two
+    observations after the decision (item 33) and a fill trial adds the fill
+    horizon on top. fill_rate's ledger realized-IG therefore measures the
+    resolution of EARLIER experiments: realized/promised ratio ~0.45, slope
+    ~0 — F5's named INV-10-wiring suspicion, confirmed as wiring, not design.
+    impact's evidence (the next mid move) does arrive inside the window, so
+    F5 binds on impact alone (slope 0.53 at the CI seeds, in band); fill_rate
+    is reported both ways (ledger + a records-based windowed estimator that
+    is itself contaminated by neighboring probes). Candidate future fix,
+    recorded not applied: resolve the ledger when the probe's own acks
+    arrive (two-slot, per item 33) — the resolution routine is committed P12
+    behavior pinned by its own suite.
+
+43. **The drive lock — the ablation's headline finding.** Drawdown is
+    measured against an all-time peak and has no corrective action (the
+    homeostat's only corrective is the inventory-excess flatten), so once
+    drawdown exceeds its soft band while inventory sits inside its own, the
+    drive bids every cycle, outbids curiosity's salience, and resolves to
+    null — an ABSORBING quiescent state. Trace: after a regime switch the
+    impact marginal reopens to ~1.4 nats and loses the competition to
+    drawdown for 600 consecutive cycles. Every homeostat-bearing condition
+    locks within a few hundred steps; NO_HOMEOSTAT shows the pure satiation
+    curve (probe rate 0.94 -> 0.02 over ~400 steps). Consequences at the
+    fixed CI seeds, pinned as falsifications by tests/acceptance/ per the
+    fairness rules (results, not bugs): F1 INVERTED (FULL median 113.5
+    messages — mostly flatten/corrective churn — vs SURPRISE 35, whose
+    z-scored surprise self-normalizes instead of churning); F2's second leg
+    falsified (NO_SELF_MODEL's probing decays too — throttled, not satiated;
+    both decay CIs exclude 0); F3 REVERSED (NO_REFLEXIVE mean |inventory|
+    6.6 vs FULL 9.0); F7 behavioral ratio 1.0 with 16/28 switch windows
+    fully quiescent, while the EPISTEMIC EIG-offer ratio is 1.25 — curiosity
+    reawakens, behavior cannot follow. F4 (soft-bound excursion time), F5
+    (impact slope), and F6 (babbling decay) are confirmed.
+
+44. **Behavioral decay conflates satiation with throttling; measured raw.**
+    The message budget binds within the same first window the babbling burst
+    occupies (soft 10 per 20 steps at the 1-message/step interface cap), so
+    no trim separates budget priming from satiation. The suite fits raw
+    decay uniformly and adjudicates cause via NO_HOMEOSTAT (throttle-free)
+    and the epistemic series. Estimator: early-vs-late Poisson log-ratio
+    with continuity correction — full quiescence must read as the strongest
+    decay, where a binned log-OLS hits its epsilon floor and biases k to 0.
+
+45. **Instrument conventions (deliberate, uncorrected biases documented).**
+    Flow-calibration truth = twin-run full-depth book-diff lots (background-
+    only by construction; the agent extracts from a 10-level window — the
+    gap is a finding, not noise). Flow parameter variance recovered exactly
+    as NB predictive variance minus mean. Regime-detection window 100 steps
+    (BOCPD needs ~3-5 slow ticks; a shorter window files the detection under
+    "stable" and inverts the contrast). Reawakening windows 100 steps with
+    continuity-corrected ratios — a 0/0 window (slept through the switch) is
+    evidence of no reawakening and reads as 1.0, never dropped. Impact
+    validation compares the end-of-run posterior against per-action run-vs-
+    twin divergence deltas, with deep placements as a placebo group.
+
 ### Adjudication (design review, 2026-07-08)
 
 All ten resolutions reviewed against the running code and **accepted**, with items 1, 6,
